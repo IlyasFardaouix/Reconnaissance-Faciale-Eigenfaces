@@ -171,6 +171,7 @@ python live_demo.py --model-path models/eigenfaces.joblib --camera-index 0
     └── eigenfaces.joblib # Modèle entraîné
 ```
 
-## Licence
+## Author
+Ilyas Fardaoui
 
-Ce projet est un prototype éducatif pour la reconnaissance faciale par Eigenfaces (PCA).
+
