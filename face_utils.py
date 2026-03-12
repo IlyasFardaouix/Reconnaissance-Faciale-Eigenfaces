@@ -5,7 +5,6 @@ import os
 import cv2
 import numpy as np
 
-
 IMAGE_SIZE: Tuple[int, int] = (200, 200)
 
 # URLs pour télécharger les modèles DNN OpenCV (optionnel, avec fallback Haar)
@@ -20,13 +19,13 @@ def ensure_dir(path: Path) -> None:
 
 class FaceDetector:
     """Wrapper pour détecteurs de visage avec fallback automatique."""
-    
+
     def __init__(self, use_dnn: bool = True):
         self.use_dnn = use_dnn
         self.dnn_net = None
         self.haar_detector = None
         self._init_detectors()
-    
+
     def _init_detectors(self):
         """Initialise les détecteurs avec fallback."""
         # Essayer DNN d'abord si demandé
@@ -35,24 +34,28 @@ class FaceDetector:
                 # Chercher les fichiers de modèle localement
                 proto_path = Path("models/opencv_face_detector.pbtxt")
                 model_path = Path("models/res10_300x300_ssd_iter_140000.caffemodel")
-                
+
                 if proto_path.exists() and model_path.exists():
                     # Essayer Caffe d'abord (format le plus commun)
                     try:
-                        self.dnn_net = cv2.dnn.readNetFromCaffe(str(proto_path), str(model_path))
+                        self.dnn_net = cv2.dnn.readNetFromCaffe(
+                            str(proto_path), str(model_path)
+                        )
                         print("[OK] Detecteur DNN (Caffe) charge")
                         return
                     except:
                         # Essayer TensorFlow
                         try:
-                            self.dnn_net = cv2.dnn.readNetFromTensorflow(str(model_path), str(proto_path))
+                            self.dnn_net = cv2.dnn.readNetFromTensorflow(
+                                str(model_path), str(proto_path)
+                            )
                             print("[OK] Detecteur DNN (TensorFlow) charge")
                             return
                         except:
                             pass
             except Exception as e:
                 pass  # Fallback silencieux vers Haar
-        
+
         # Fallback vers Haar cascade (toujours disponible)
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self.haar_detector = cv2.CascadeClassifier(cascade_path)
@@ -62,7 +65,7 @@ class FaceDetector:
             print("[OK] Detecteur Haar charge")
         else:
             print("[OK] Detecteur Haar charge (fallback depuis DNN)")
-    
+
     def detect(self, gray: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
         Détecte les visages et retourne liste de (x, y, w, h).
@@ -72,27 +75,27 @@ class FaceDetector:
             return self._detect_dnn(gray)
         else:
             return self._detect_haar(gray)
-    
+
     def _detect_dnn(self, gray: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """Détection via DNN OpenCV (format Caffe ou TensorFlow)."""
         h, w = gray.shape
-        
+
         # Créer le blob pour le réseau (300x300 pour ResNet-SSD)
         blob = cv2.dnn.blobFromImage(
             cv2.resize(gray, (300, 300)),
             1.0,
             (300, 300),
-            [104.0, 117.0, 123.0]  # Valeurs de normalisation BGR
+            [104.0, 117.0, 123.0],  # Valeurs de normalisation BGR
         )
-        
+
         self.dnn_net.setInput(blob)
         detections = self.dnn_net.forward()
-        
+
         faces = []
         # Format de sortie: [batch, class_id, confidence, x1, y1, x2, y2]
         # ou [batch, 1, num_detections, 7] où 7 = [class_id, confidence, x1, y1, x2, y2, ?]
         detection_shape = detections.shape
-        
+
         if len(detection_shape) == 4 and detection_shape[2] == 1:
             # Format TensorFlow: [batch, 1, num_detections, 7]
             for i in range(detection_shape[3]):
@@ -106,7 +109,11 @@ class FaceDetector:
         else:
             # Format Caffe/SSD standard: [batch, 1, num_detections, 7]
             # ou [batch, num_detections, 7]
-            for i in range(detections.shape[2] if len(detections.shape) == 4 else detections.shape[1]):
+            for i in range(
+                detections.shape[2]
+                if len(detections.shape) == 4
+                else detections.shape[1]
+            ):
                 if len(detections.shape) == 4:
                     confidence = detections[0, 0, i, 2]
                     if confidence > 0.5:
@@ -123,9 +130,9 @@ class FaceDetector:
                         x2 = int(detections[0, i, 5] * w)
                         y2 = int(detections[0, i, 6] * h)
                         faces.append((x1, y1, x2 - x1, y2 - y1))
-        
+
         return faces
-    
+
     def _detect_haar(self, gray: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """Détection via Haar cascade."""
         faces = self.haar_detector.detectMultiScale(
@@ -134,50 +141,55 @@ class FaceDetector:
         return [(x, y, w, h) for (x, y, w, h) in faces]
 
 
-def align_face(face_gray: np.ndarray, eyes: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None) -> np.ndarray:
+def align_face(
+    face_gray: np.ndarray,
+    eyes: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+) -> np.ndarray:
     """
     Aligne le visage horizontalement en utilisant les yeux.
     Si les yeux ne sont pas fournis, utilise une détection simple basée sur la géométrie.
     """
     h, w = face_gray.shape
-    
+
     if eyes is not None:
         left_eye, right_eye = eyes
         # Calculer l'angle de rotation
         dy = right_eye[1] - left_eye[1]
         dx = right_eye[0] - left_eye[0]
         angle = np.degrees(np.arctan2(dy, dx))
-        
+
         # Centre du visage
         center = (w // 2, h // 2)
         M = cv2.getRotationMatrix2D(center, angle, 1.0)
         aligned = cv2.warpAffine(face_gray, M, (w, h), flags=cv2.INTER_LINEAR)
         return aligned
-    
+
     # Fallback: détection simple des yeux avec Haar cascade
     eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
-    eyes_detected = eye_cascade.detectMultiScale(face_gray, scaleFactor=1.1, minNeighbors=5, minSize=(20, 20))
-    
+    eyes_detected = eye_cascade.detectMultiScale(
+        face_gray, scaleFactor=1.1, minNeighbors=5, minSize=(20, 20)
+    )
+
     if len(eyes_detected) >= 2:
         # Prendre les deux yeux les plus grands
         eyes_sorted = sorted(eyes_detected, key=lambda e: e[2] * e[3], reverse=True)[:2]
         eye_centers = [(x + w // 2, y + h // 2) for (x, y, w, h) in eyes_sorted]
-        
+
         # Déterminer gauche/droite
         if eye_centers[0][0] < eye_centers[1][0]:
             left_eye, right_eye = eye_centers[0], eye_centers[1]
         else:
             left_eye, right_eye = eye_centers[1], eye_centers[0]
-        
+
         dy = right_eye[1] - left_eye[1]
         dx = right_eye[0] - left_eye[0]
         angle = np.degrees(np.arctan2(dy, dx))
-        
+
         center = (w // 2, h // 2)
         M = cv2.getRotationMatrix2D(center, angle, 1.0)
         aligned = cv2.warpAffine(face_gray, M, (w, h), flags=cv2.INTER_LINEAR)
         return aligned
-    
+
     # Pas d'alignement possible, retourner l'original
     return face_gray
 
@@ -195,7 +207,7 @@ def detect_and_preprocess(
 ) -> Optional[np.ndarray]:
     """
     Détecte le plus grand visage, aligne, redimensionne, applique CLAHE.
-    
+
     Args:
         frame_bgr: Image BGR
         detector: FaceDetector ou CascadeClassifier
@@ -203,41 +215,43 @@ def detect_and_preprocess(
         use_alignment: Activer l'alignement de visage
     """
     gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-    
+
     # Détection
     if isinstance(detector, FaceDetector):
         faces = detector.detect(gray)
     else:
         # Compatibilité avec l'ancien code
-        faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=6, minSize=(60, 60))
+        faces = detector.detectMultiScale(
+            gray, scaleFactor=1.1, minNeighbors=6, minSize=(60, 60)
+        )
         faces = [(x, y, w, h) for (x, y, w, h) in faces]
-    
+
     if len(faces) == 0:
         return None
-    
+
     # Garder la plus grande détection
     x, y, w, h = max(faces, key=lambda rect: rect[2] * rect[3])
-    
+
     # Extraire le visage avec un peu de marge
     margin = int(min(w, h) * 0.1)
     x = max(0, x - margin)
     y = max(0, y - margin)
     w = min(gray.shape[1] - x, w + 2 * margin)
     h = min(gray.shape[0] - y, h + 2 * margin)
-    
+
     face = gray[y : y + h, x : x + w]
-    
+
     # Alignement (optionnel mais recommandé)
     if use_alignment:
         face = align_face(face)
-    
+
     # Redimensionnement
     face = cv2.resize(face, image_size)
-    
+
     # CLAHE pour robustesse à l'éclairage
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     face = clahe.apply(face)
-    
+
     return face
 
 
@@ -270,19 +284,23 @@ def load_labeled_faces(
             img_bgr = cv2.imread(str(img_path))
             if img_bgr is None:
                 continue
-            face = detect_and_preprocess(img_bgr, detector, image_size=image_size, use_alignment=use_alignment)
+            face = detect_and_preprocess(
+                img_bgr, detector, image_size=image_size, use_alignment=use_alignment
+            )
             if face is None:
                 continue
             images.append(face)
             labels.append(1)  # Label 1 pour autorisé
-    
+
     # Charger les autres (label 0)
     if others_dir.exists():
         for img_path in _iter_image_files(others_dir):
             img_bgr = cv2.imread(str(img_path))
             if img_bgr is None:
                 continue
-            face = detect_and_preprocess(img_bgr, detector, image_size=image_size, use_alignment=use_alignment)
+            face = detect_and_preprocess(
+                img_bgr, detector, image_size=image_size, use_alignment=use_alignment
+            )
             if face is None:
                 continue
             images.append(face)
@@ -300,34 +318,38 @@ def load_multi_user_faces(
     """
     Charge les visages avec support multi-utilisateurs.
     Structure attendue: data/user_1/, data/user_2/, etc. et data/others/
-    
+
     Returns:
         images, labels, label_to_name: labels commencent à 1 pour users, 0 pour others
     """
     images: List[np.ndarray] = []
     labels: List[int] = []
     label_to_name: Dict[int, str] = {0: "others"}
-    
+
     # Chercher les dossiers user_*
-    user_dirs = sorted([d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith("user_")])
-    
+    user_dirs = sorted(
+        [d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith("user_")]
+    )
+
     user_id = 1
     for user_dir in user_dirs:
         user_name = user_dir.name
         label_to_name[user_id] = user_name
-        
+
         for img_path in _iter_image_files(user_dir):
             img_bgr = cv2.imread(str(img_path))
             if img_bgr is None:
                 continue
-            face = detect_and_preprocess(img_bgr, detector, image_size=image_size, use_alignment=use_alignment)
+            face = detect_and_preprocess(
+                img_bgr, detector, image_size=image_size, use_alignment=use_alignment
+            )
             if face is None:
                 continue
             images.append(face)
             labels.append(user_id)
-        
+
         user_id += 1
-    
+
     # Fallback: si pas de user_*, utiliser authorized/ comme user_1
     authorized_dir = data_dir / "authorized"
     if len(user_dirs) == 0 and authorized_dir.exists():
@@ -336,13 +358,15 @@ def load_multi_user_faces(
             img_bgr = cv2.imread(str(img_path))
             if img_bgr is None:
                 continue
-            face = detect_and_preprocess(img_bgr, detector, image_size=image_size, use_alignment=use_alignment)
+            face = detect_and_preprocess(
+                img_bgr, detector, image_size=image_size, use_alignment=use_alignment
+            )
             if face is None:
                 continue
             images.append(face)
             labels.append(1)
         user_id = 2
-    
+
     # Charger les autres (label 0)
     others_dir = data_dir / "others"
     if others_dir.exists():
@@ -350,7 +374,9 @@ def load_multi_user_faces(
             img_bgr = cv2.imread(str(img_path))
             if img_bgr is None:
                 continue
-            face = detect_and_preprocess(img_bgr, detector, image_size=image_size, use_alignment=use_alignment)
+            face = detect_and_preprocess(
+                img_bgr, detector, image_size=image_size, use_alignment=use_alignment
+            )
             if face is None:
                 continue
             images.append(face)

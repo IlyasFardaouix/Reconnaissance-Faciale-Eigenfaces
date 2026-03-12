@@ -1,4 +1,3 @@
-```python
 from pathlib import Path
 import argparse
 import json
@@ -7,14 +6,7 @@ import joblib
 import numpy as np
 from sklearn.decomposition import PCA
 
-from face_utils import (
-    IMAGE_SIZE,
-    build_face_detector,
-    ensure_dir,
-    flatten_images,
-    load_labeled_faces,
-    load_multi_user_faces,
-)
+from face_utils import IMAGE_SIZE, build_face_detector, ensure_dir, flatten_images, load_labeled_faces, load_multi_user_faces
 
 
 def compute_threshold(auth_dists: np.ndarray, other_dists: np.ndarray) -> float:
@@ -23,14 +15,11 @@ def compute_threshold(auth_dists: np.ndarray, other_dists: np.ndarray) -> float:
     - If negatives exist: use mid-point between 95e percentile (authorized) and 5e percentile (others).
     - Fallbacks to a conservative mean + 2*std when no negatives.
     """
-    # If other distances exist, calculate the midpoint between the 95th percentile of authorized distances
-    # and the 5th percentile of other distances
     if other_dists.size:
         q_auth = np.percentile(auth_dists, 95)
         q_other = np.percentile(other_dists, 5)
         # If overlap, still take the midpoint — caller can tighten with --confidence-scale.
         return float((q_auth + q_other) / 2.0)
-    # If no other distances exist, use a conservative mean + 2*std
     mean = auth_dists.mean()
     std = auth_dists.std() if auth_dists.size > 1 else 0.0
     return float(mean + 2.0 * std)
@@ -45,49 +34,40 @@ def train_model(
     use_alignment: bool = True,
 ) -> None:
     """
-    Train the Eigenfaces PCA model with support for multi-users.
-
+    Entraîne le modèle Eigenfaces avec support multi-utilisateurs.
+    
     Args:
-        data_dir: Root folder containing authorized/ and others/ or user_*/.
-        n_components: Maximum number of PCA components.
-        model_path: Path to save the trained model.
-        multi_user: Enable multi-user mode (expects user_1/, user_2/, etc.).
-        use_dnn: Use DNN face detector if available.
-        use_alignment: Enable face alignment.
+        data_dir: Dossier contenant les données
+        n_components: Nombre de composantes PCA
+        model_path: Chemin de sauvegarde du modèle
+        multi_user: Si True, utilise load_multi_user_faces (structure user_1/, user_2/, etc.)
+        use_dnn: Utiliser le détecteur DNN si disponible
+        use_alignment: Activer l'alignement de visage
     """
-    # Build the face detector
     detector = build_face_detector(use_dnn=use_dnn)
-
-    # Load the faces
+    
     if multi_user:
-        # Load multi-user faces
         images, labels, label_to_name = load_multi_user_faces(
             data_dir, detector, image_size=IMAGE_SIZE, use_alignment=use_alignment
         )
     else:
-        # Load labeled faces
         images, labels = load_labeled_faces(
             data_dir, detector, image_size=IMAGE_SIZE, use_alignment=use_alignment
         )
         label_to_name = {1: "authorized", 0: "others"}
 
-    # Check if there are enough images
     if len(images) < 10:
-        raise RuntimeError("Not enough images. Aim for >= 60 authorized and >= 30 negatives.")
+        raise RuntimeError("Pas assez d'images. Visez >= 60 autorisées et >= 30 négatives.")
 
-    # Flatten the images and convert to float32
     X = flatten_images(images).astype(np.float32)
     y = np.array(labels, dtype=int)
 
-    # Limit the number of components to the number of images minus one
     n_components = min(n_components, len(images) - 1, X.shape[1])
-
-    # Create a PCA instance with the specified number of components
     pca = PCA(n_components=n_components, whiten=True, svd_solver="randomized")
     embeddings = pca.fit_transform(X)
 
-    # Calculate the centroids for each authorized user
-    user_ids = sorted(set(y[y > 0]))  # Labels > 0 are authorized users
+    # Calculer les centroïdes pour chaque utilisateur autorisé
+    user_ids = sorted(set(y[y > 0]))  # Labels > 0 sont les utilisateurs autorisés
     user_centroids = {}
     user_distances = {}
     all_auth_dists = []
@@ -97,17 +77,16 @@ def train_model(
         user_embeddings = embeddings[y == user_id]
         if len(user_embeddings) == 0:
             continue
-
-        # Calculate the centroid for the user
+        
         centroid = user_embeddings.mean(axis=0)
         user_centroids[user_id] = centroid
-
-        # Calculate the distances within the user
+        
+        # Distances intra-utilisateur
         dists = np.linalg.norm(user_embeddings - centroid, axis=1)
         user_distances[user_id] = dists
         all_auth_dists.extend(dists.tolist())
-
-        # Calculate the distances from other users to this centroid
+        
+        # Distances des autres utilisateurs à ce centroïde
         if len(user_ids) > 1:
             for other_user_id in user_ids:
                 if other_user_id != user_id:
@@ -116,11 +95,11 @@ def train_model(
                         other_dists = np.linalg.norm(other_embeddings - centroid, axis=1)
                         all_other_dists.extend(other_dists.tolist())
 
-    # Calculate the distances from "others" (label 0) to the closest centroid
+    # Distances des "others" (label 0) vers le centroïde le plus proche
     if 0 in y:
         other_embeddings = embeddings[y == 0]
         if len(other_embeddings) > 0 and len(user_centroids) > 0:
-            # For each "other", calculate the distance to the closest centroid
+            # Pour chaque "other", calculer la distance au centroïde le plus proche
             for other_emb in other_embeddings:
                 min_dist = min(
                     np.linalg.norm(other_emb - centroid) for centroid in user_centroids.values()
@@ -130,27 +109,26 @@ def train_model(
     all_auth_dists = np.array(all_auth_dists)
     all_other_dists = np.array(all_other_dists)
 
-    # Calculate a global threshold or per-user threshold
+    # Calculer un seuil global ou par utilisateur
     if len(user_centroids) == 1:
-        # Simple mode: one user
+        # Mode simple: un seul utilisateur
         threshold = compute_threshold(all_auth_dists, all_other_dists)
         thresholds = {list(user_centroids.keys())[0]: threshold}
     else:
-        # Multi-user mode: threshold per user
+        # Mode multi-utilisateurs: seuil par utilisateur
         thresholds = {}
         for user_id in user_ids:
             user_dists = user_distances[user_id]
-            # Distances from others to this centroid
+            # Distances des autres vers ce centroïde
             other_to_this = []
             for other_emb in embeddings[y != user_id]:
                 other_to_this.append(np.linalg.norm(other_emb - user_centroids[user_id]))
             other_to_this = np.array(other_to_this)
             thresholds[user_id] = compute_threshold(user_dists, other_to_this)
-
-        # Global threshold for compatibility
+        
+        # Seuil global pour la compatibilité
         threshold = compute_threshold(all_auth_dists, all_other_dists)
 
-    # Create the model dictionary
     model = {
         "pca": pca,
         "user_centroids": user_centroids,  # Dict {user_id: centroid}
@@ -164,11 +142,10 @@ def train_model(
         "use_alignment": use_alignment,
     }
 
-    # Save the model
     ensure_dir(model_path.parent)
     joblib.dump(model, model_path)
 
-    # Create a summary dictionary
+    # Résumé
     summary = {
         "samples": int(len(images)),
         "n_users": len(user_centroids),
@@ -177,29 +154,21 @@ def train_model(
         "threshold": float(threshold),
         "thresholds_per_user": {str(uid): float(th) for uid, th in thresholds.items()},
     }
-
-    # Add percentile information
+    
     if len(all_auth_dists) > 0:
         summary["auth_dist_p50"] = float(np.percentile(all_auth_dists, 50))
         summary["auth_dist_p95"] = float(np.percentile(all_auth_dists, 95))
-
+    
     if len(all_other_dists) > 0:
         summary["other_dist_p5"] = float(np.percentile(all_other_dists, 5))
         summary["other_dist_p50"] = float(np.percentile(all_other_dists, 50))
-
+    
     summary["n_components"] = int(pca.n_components_)
-
-    # Print the summary
+    
     print(json.dumps(summary, indent=2))
 
 
 def parse_args() -> argparse.Namespace:
-    """
-    Parse the command-line arguments.
-
-    Returns:
-        argparse.Namespace: The parsed arguments.
-    """
     parser = argparse.ArgumentParser(description="Train Eigenfaces PCA model for face verification.")
     parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Root folder containing authorized/ and others/ or user_*/")
     parser.add_argument("--n-components", type=int, default=80, help="Max number of PCA components.")
@@ -220,4 +189,3 @@ if __name__ == "__main__":
         use_dnn=args.use_dnn,
         use_alignment=args.use_alignment,
     )
-```

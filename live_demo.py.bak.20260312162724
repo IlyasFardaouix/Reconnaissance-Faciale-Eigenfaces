@@ -1,4 +1,3 @@
-```python
 from pathlib import Path
 import argparse
 import time
@@ -12,16 +11,8 @@ from face_utils import build_face_detector, detect_and_preprocess, draw_status
 
 
 class DecisionBuffer:
-    """
-    Buffer circulaire pour vote majoritaire sur plusieurs frames.
+    """Buffer circulaire pour vote majoritaire sur plusieurs frames."""
     
-    Attributes:
-        max_size (int): Nombre de frames à garder en mémoire pour le vote
-        distances (deque): File d'attente pour les distances
-        predictions (deque): File d'attente pour les prédictions
-        user_ids (deque): File d'attente pour les IDs d'utilisateurs
-    """
-
     def __init__(self, max_size: int = 20):
         """
         Args:
@@ -31,31 +22,18 @@ class DecisionBuffer:
         self.distances = deque(maxlen=max_size)
         self.predictions = deque(maxlen=max_size)  # 0=refus, 1=autorisé, user_id pour multi-user
         self.user_ids = deque(maxlen=max_size)  # Pour multi-user
-
+    
     def add(self, distance: float, threshold: float, user_id: int = 1) -> None:
-        """
-        Ajoute une mesure.
-        
-        Args:
-            distance: Distance à ajouter
-            threshold: Seuil pour la décision
-            user_id: ID de l'utilisateur (par défaut 1)
-        """
+        """Ajoute une mesure."""
         self.distances.append(distance)
         is_authorized = distance <= threshold
         self.predictions.append(1 if is_authorized else 0)
         self.user_ids.append(user_id)
-
+    
     def get_majority_decision(self) -> tuple:
         """
         Retourne (decision, confidence, median_distance, detected_user_id)
         decision: 0=refus, 1=autorisé, user_id pour multi-user
-        confidence: Niveau de confiance pour la décision
-        median_distance: Distance médiane
-        detected_user_id: ID de l'utilisateur détecté
-        
-        Returns:
-            tuple: (decision, confidence, median_distance, detected_user_id)
         """
         if len(self.predictions) == 0:
             return None, 0.0, None, None
@@ -82,39 +60,21 @@ class DecisionBuffer:
             confidence = authorized_count / len(self.predictions)
             decision = 1 if authorized_count > len(self.predictions) * 0.6 else 0
             return decision, confidence, median_dist, self.user_ids[0] if len(self.user_ids) > 0 else None
-
+    
     def clear(self) -> None:
-        """
-        Réinitialise le buffer.
-        """
+        """Réinitialise le buffer."""
         self.distances.clear()
         self.predictions.clear()
         self.user_ids.clear()
-
+    
     def is_ready(self, min_frames: int = 8) -> bool:
-        """
-        Vérifie si on a assez de frames pour prendre une décision.
-        
-        Args:
-            min_frames: Nombre minimum de frames requises
-        
-        Returns:
-            bool: True si le buffer est prêt, False sinon
-        """
+        """Vérifie si on a assez de frames pour prendre une décision."""
         return len(self.predictions) >= min_frames
 
 
 def find_nearest_user(embedding: np.ndarray, user_centroids: dict, thresholds: dict) -> tuple:
     """
     Trouve l'utilisateur le plus proche et retourne (user_id, distance, is_authorized).
-    
-    Args:
-        embedding: Embedding de l'utilisateur
-        user_centroids: Centres des utilisateurs
-        thresholds: Seuils pour les utilisateurs
-    
-    Returns:
-        tuple: (user_id, distance, is_authorized)
     """
     if not user_centroids:
         return None, None, False
@@ -286,12 +246,6 @@ def run_demo(
 
 
 def parse_args() -> argparse.Namespace:
-    """
-    Parse les arguments de la ligne de commande.
-    
-    Returns:
-        argparse.Namespace: Namespace contenant les arguments parsés
-    """
     parser = argparse.ArgumentParser(description="Live demo using trained Eigenfaces model.")
     parser.add_argument("--model-path", type=Path, default=Path("models/eigenfaces.joblib"), help="Path to trained model.")
     parser.add_argument("--camera-index", type=int, default=0, help="Camera index for cv2.VideoCapture.")
@@ -319,4 +273,3 @@ if __name__ == "__main__":
         buffer_size=args.buffer_size,
         min_frames=args.min_frames,
     )
-```
