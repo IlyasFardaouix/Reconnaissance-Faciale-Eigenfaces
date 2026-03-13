@@ -1,144 +1,49 @@
 ```python
-import argparse
 import pytest
 from unittest.mock import Mock, patch
 from pathlib import Path
-
-def parse_args():
-    """
-    Parse command line arguments.
-
-    Returns:
-        argparse.Namespace: Parsed arguments.
-    """
-    parser = argparse.ArgumentParser(description='Face Capture')
-    parser.add_argument('--label', help='Label for the captured faces')
-    parser.add_argument('--output-dir', help='Output directory for the captured faces')
-    parser.add_argument('--count', type=int, help='Number of faces to capture')
-    parser.add_argument('--camera-index', type=int, help='Index of the camera to use')
-    parser.add_argument('--delay', type=float, help='Delay between captures')
-    parser.add_argument('--use-dnn', action='store_true', help='Use deep neural network for face detection')
-    parser.add_argument('--use-alignment', action='store_true', help='Use face alignment')
-    return parser.parse_args()
-
-def build_face_detector(use_dnn):
-    """
-    Build face detector.
-
-    Args:
-        use_dnn (bool): Whether to use deep neural network for face detection
-
-    Returns:
-        face_detector: Built face detector
-    """
-    # TO DO: Implement face detector building
-    pass
-
-def ensure_dir(output_dir):
-    """
-    Ensure output directory exists.
-
-    Args:
-        output_dir (Path): Output directory
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-def collect_faces(label, output_dir, count, camera_index, delay, use_dnn, use_alignment):
-    """
-    Capture and save faces.
-
-    Args:
-        label (str): Label for the captured faces
-        output_dir (Path): Output directory for the captured faces
-        count (int): Number of faces to capture
-        camera_index (int): Index of the camera to use
-        delay (float): Delay between captures
-        use_dnn (bool): Whether to use deep neural network for face detection
-        use_alignment (bool): Whether to use face alignment
-    """
-    face_detector = build_face_detector(use_dnn)
-    ensure_dir(output_dir)
-    cap = cv2.VideoCapture(camera_index)
-    if not cap.isOpened():
-        raise RuntimeError('Failed to open camera')
-    for _ in range(count):
-        ret, frame = cap.read()
-        if not ret:
-            raise RuntimeError('Failed to read frame')
-        faces = face_detector.detect_faces(frame)
-        for face in faces:
-            cv2.imwrite(str(output_dir / f'{label}_{len(output_dir.glob(f"{label}_*.jpg"))}.jpg'), face)
-        cv2.imshow('Frame', frame)
-        cv2.waitKey(int(delay * 1000))
-    cv2.destroyAllWindows()
+from . import face_capture  # replace with actual module name
 
 def test_parse_args():
-    """
-    Test parsing command line arguments.
-    """
-    args = parse_args()
+    args = face_capture.parse_args()
     assert isinstance(args, argparse.Namespace)
 
 def test_parse_args_label():
-    """
-    Test parsing command line arguments with label.
-    """
     with patch('sys.argv', ['script.py', '--label', 'test_label']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.label == 'test_label'
 
 def test_parse_args_output_dir():
-    """
-    Test parsing command line arguments with output directory.
-    """
     with patch('sys.argv', ['script.py', '--output-dir', 'test_output_dir']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.output_dir == Path('test_output_dir')
 
 def test_parse_args_count():
-    """
-    Test parsing command line arguments with count.
-    """
     with patch('sys.argv', ['script.py', '--count', '10']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.count == 10
 
 def test_parse_args_camera_index():
-    """
-    Test parsing command line arguments with camera index.
-    """
     with patch('sys.argv', ['script.py', '--camera-index', '1']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.camera_index == 1
 
 def test_parse_args_delay():
-    """
-    Test parsing command line arguments with delay.
-    """
     with patch('sys.argv', ['script.py', '--delay', '0.5']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.delay == 0.5
 
 def test_parse_args_use_dnn():
-    """
-    Test parsing command line arguments with use DNN.
-    """
     with patch('sys.argv', ['script.py', '--use-dnn']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.use_dnn
 
 def test_parse_args_use_alignment():
-    """
-    Test parsing command line arguments with use alignment.
-    """
     with patch('sys.argv', ['script.py', '--use-alignment']):
-        args = parse_args()
+        args = face_capture.parse_args()
         assert args.use_alignment
 
 def test_collect_faces():
-    """
-    Test capturing and saving faces.
-    """
     with patch('face_capture.build_face_detector') as mock_build_face_detector:
         with patch('face_capture.ensure_dir') as mock_ensure_dir:
             with patch('cv2.VideoCapture') as mock_cv2_VideoCapture:
@@ -146,7 +51,7 @@ def test_collect_faces():
                     with patch('cv2.waitKey') as mock_cv2_waitKey:
                         with patch('cv2.destroyAllWindows') as mock_cv2_destroyAllWindows:
                             with patch('cv2.imwrite') as mock_cv2_imwrite:
-                                collect_faces(
+                                face_capture.collect_faces(
                                     'test_label',
                                     Path('test_output_dir'),
                                     10,
@@ -164,9 +69,6 @@ def test_collect_faces():
                                 mock_cv2_imwrite.assert_called()
 
 def test_collect_faces_no_dnn():
-    """
-    Test capturing and saving faces without DNN.
-    """
     with patch('face_capture.build_face_detector') as mock_build_face_detector:
         with patch('face_capture.ensure_dir') as mock_ensure_dir:
             with patch('cv2.VideoCapture') as mock_cv2_VideoCapture:
@@ -174,7 +76,7 @@ def test_collect_faces_no_dnn():
                     with patch('cv2.waitKey') as mock_cv2_waitKey:
                         with patch('cv2.destroyAllWindows') as mock_cv2_destroyAllWindows:
                             with patch('cv2.imwrite') as mock_cv2_imwrite:
-                                collect_faces(
+                                face_capture.collect_faces(
                                     'test_label',
                                     Path('test_output_dir'),
                                     10,
@@ -192,9 +94,6 @@ def test_collect_faces_no_dnn():
                                 mock_cv2_imwrite.assert_called()
 
 def test_collect_faces_no_alignment():
-    """
-    Test capturing and saving faces without alignment.
-    """
     with patch('face_capture.build_face_detector') as mock_build_face_detector:
         with patch('face_capture.ensure_dir') as mock_ensure_dir:
             with patch('cv2.VideoCapture') as mock_cv2_VideoCapture:
@@ -202,7 +101,7 @@ def test_collect_faces_no_alignment():
                     with patch('cv2.waitKey') as mock_cv2_waitKey:
                         with patch('cv2.destroyAllWindows') as mock_cv2_destroyAllWindows:
                             with patch('cv2.imwrite') as mock_cv2_imwrite:
-                                collect_faces(
+                                face_capture.collect_faces(
                                     'test_label',
                                     Path('test_output_dir'),
                                     10,
@@ -220,13 +119,10 @@ def test_collect_faces_no_alignment():
                                 mock_cv2_imwrite.assert_called()
 
 def test_collect_faces_camera_error():
-    """
-    Test capturing and saving faces with camera error.
-    """
     with patch('cv2.VideoCapture') as mock_cv2_VideoCapture:
         mock_cv2_VideoCapture.return_value.isOpened.return_value = False
         with pytest.raises(RuntimeError):
-            collect_faces(
+            face_capture.collect_faces(
                 'test_label',
                 Path('test_output_dir'),
                 10,
