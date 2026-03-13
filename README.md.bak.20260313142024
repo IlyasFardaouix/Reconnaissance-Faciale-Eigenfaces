@@ -147,7 +147,7 @@ python live_demo.py --model-path models/eigenfaces.joblib --camera-index 0
 - Assurez-vous d'avoir un bon éclairage frontal
 
 ## Structure des Fichiers
-```markdown
+```
 .
 ├── face_utils.py          # Utilitaires : détection, prétraitement, alignement
 ├── collect_faces.py       # Script de capture depuis webcam
