@@ -1,0 +1,168 @@
+# Reconnaissance de Visage par Eigenfaces (PCA) - Version Améliorée
+===========================================================
+
+## Table des Matières
+1. [Introduction](#introduction)
+2. [Nouvelles Fonctionnalités](#nouvelles-fonctionnalités)
+3. [Prérequis](#prérequis)
+4. [Structure](#structure)
+5. [Utilisation](#utilisation)
+6. [Notes Techniques](#notes-techniques)
+7. [Améliorations de Performance](#améliorations-de-performance)
+8. [Dépannage](#dépannage)
+9. [Structure des Fichiers](#structure-des-fichiers)
+10. [Auteur](#auteur)
+
+## Introduction
+Ce prototype utilise la technique d'Eigenfaces (PCA) pour la reconnaissance de visage. Il prend en charge le contrôle d'accès binaire avec plusieurs utilisateurs autorisés. Si le visage détecté correspond à un utilisateur autorisé, le système affiche "ACCES AUTORISE", sinon "ACCES REFUSE".
+
+## Nouvelles Fonctionnalités
+### Détecteur DNN OpenCV
+Le détecteur DNN OpenCV est utilisé pour détecter les visages avec une plus grande précision. En cas d'indisponibilité des modèles DNN, un fallback automatique vers Haar cascade est activé.
+
+### Alignement de Visage
+L'alignement de visage est effectué en utilisant les landmarks pour réduire la variabilité angulaire. Cela permet d'améliorer la précision de la reconnaissance.
+
+### Vote Majoritaire Amélioré
+Le vote majoritaire est effectué sur une fenêtre glissante de 20 frames par défaut. Cela permet de réduire le bruit et les faux positifs/négatifs.
+
+### Support Multi-Utilisateurs
+Le système prend en charge plusieurs utilisateurs autorisés avec des centroïdes séparés. Cela permet d'améliorer la précision de la reconnaissance en fonction de l'utilisateur.
+
+### Prétraitement Amélioré
+Le prétraitement utilise la CLAHE (Contrast Limited Adaptive Histogram Equalization) pour améliorer la robustesse à l'éclairage.
+
+## Prérequis
+- Python 3.9+
+- Webcam fonctionnelle
+- `pip install -r requirements.txt`
+
+## Structure
+### Mode Simple (Un Utilisateur)
+- `data/authorized/` : Visages de l'utilisateur autorisé
+- `data/others/` : Visages des autres personnes (négatifs)
+
+### Mode Multi-Utilisateurs
+- `data/user_1/` : Visages du premier utilisateur autorisé
+- `data/user_2/` : Visages du deuxième utilisateur autorisé
+- `data/user_3/` : etc.
+- `data/others/` : Visages des autres personnes (négatifs)
+
+- `models/eigenfaces.joblib` : Modèle entraîné
+
+## Utilisation
+### 1) Collecte des Visages
+#### Mode Simple
+```bash
+python collect_faces.py --label authorized --count 80
+python collect_faces.py --label others --count 40
+```
+
+#### Mode Multi-Utilisateurs
+```bash
+python collect_faces.py --label user_1 --count 80
+python collect_faces.py --label user_2 --count 80
+python collect_faces.py --label others --count 40
+```
+
+**Options Disponibles :**
+- `--use-dnn` : Utiliser le détecteur DNN (par défaut activé, fallback Haar si indisponible)
+- `--use-alignment` : Activer l'alignement de visage (par défaut activé)
+- `--delay` : Délai entre captures (défaut: 0.25s)
+
+### 2) Entraînement Eigenfaces (PCA)
+#### Mode Simple
+```bash
+python train.py --data-dir data --n-components 80
+```
+
+#### Mode Multi-Utilisateurs
+```bash
+python train.py --data-dir data --n-components 80 --multi-user
+```
+
+**Options Disponibles :**
+- `--n-components` : Nombre de composantes PCA (défaut: 80)
+- `--multi-user` : Activer le mode multi-utilisateurs
+- `--use-dnn` : Utiliser le détecteur DNN pour le prétraitement
+- `--use-alignment` : Activer l'alignement de visage
+
+### 3) Démonstration en Direct
+```bash
+python live_demo.py --model-path models/eigenfaces.joblib --camera-index 0
+```
+
+**Options Disponibles :**
+- `--confidence-scale` : Facteur de multiplication du seuil (<1 plus permissif, >1 plus strict, défaut: 1.0)
+- `--buffer-size` : Taille du buffer pour vote majoritaire (défaut: 20 frames)
+- `--min-frames` : Nombre minimum de frames avant décision (défaut: 8)
+- `--use-dnn` : Utiliser le détecteur DNN
+- `--use-alignment` : Activer l'alignement de visage
+
+## Notes Techniques
+### Détection de Visage
+- **Détecteur DNN OpenCV** : Plus robuste aux angles et éclairages variés
+- **Fallback Haar Cascade** : Si les modèles DNN ne sont pas disponibles
+- Détection automatique du plus grand visage dans le cadre
+
+### Prétraitement
+- Conversion en niveaux de gris
+- **Alignement Automatique** : Rotation basée sur la position des yeux pour normaliser l'orientation
+- Redimensionnement à 200x200 pixels
+- **CLAHE** : Égalisation adaptative d'histogramme pour robustesse à l'éclairage
+
+### Reconnaissance
+- **PCA (Principal Component Analysis)** avec `whiten=True` pour décorréler les composantes
+- Projection dans un espace de faible dimension (80 composantes par défaut)
+- Distance euclidienne au centroïde de l'utilisateur autorisé
+- **Seuil Adaptatif** : Calculé entre le 95e percentile des distances autorisées et le 5e percentile des distances négatives
+
+### Décision Temporelle
+- **Vote Majoritaire** sur une fenêtre glissante de 20 frames
+- Décision après au moins 8 frames consécutifs avec visage détecté
+- Réduction du bruit et des faux positifs/négatifs
+
+## Améliorations de Performance
+1. **Détecteur DNN** : Meilleure précision de détection, moins de faux négatifs
+2. **Alignement** : Réduction de la variabilité due aux angles de vue
+3. **Vote Majoritaire** : Stabilité temporelle, réduction du bruit
+4. **CLAHE** : Robustesse aux variations d'éclairage
+5. **Multi-Utilisateurs** : Support natif pour plusieurs personnes autorisées
+
+## Dépannage
+### Le Système Ne Reconnaît Pas Mon Visage
+- Vérifiez que vous avez capturé suffisamment d'images (≥80 recommandé)
+- Variez les angles, distances et éclairages lors de la capture
+- Ajustez `--confidence-scale` à 0.8 ou 0.9 pour être plus permissif
+- Vérifiez l'éclairage lors de la démo (évitez les reflets, ombres fortes)
+
+### Trop de Faux Positifs
+- Augmentez `--confidence-scale` à 1.2 ou 1.3
+- Ajoutez plus d'images négatives dans `data/others/`
+- Augmentez `--buffer-size` pour un vote plus conservateur
+
+### Détection Instable
+- Augmentez `--min-frames` pour exiger plus de frames avant décision
+- Vérifiez que la webcam fonctionne correctement
+- Assurez-vous d'avoir un bon éclairage frontal
+
+## Structure des Fichiers
+```markdown
+.
+├── face_utils.py          # Utilitaires : détection, prétraitement, alignement
+├── collect_faces.py       # Script de capture depuis webcam
+├── train.py               # Entraînement du modèle Eigenfaces
+├── live_demo.py           # Démonstration en temps réel
+├── requirements.txt       # Dépendances Python
+├── README.md              # Ce fichier
+├── data/
+│   ├── authorized/       # Visages autorisés (mode simple)
+│   ├── user_1/           # Utilisateur 1 (mode multi-user)
+│   ├── user_2/           # Utilisateur 2 (mode multi-user)
+│   └── others/           # Visages négatifs
+└── models/
+    └── eigenfaces.joblib # Modèle entraîné
+```
+
+## Auteur
+Ilyas Fardaoui
