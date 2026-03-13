@@ -17,20 +17,11 @@
 Ce prototype utilise la technique d'Eigenfaces (PCA) pour la reconnaissance de visage. Il prend en charge le contrôle d'accès binaire avec plusieurs utilisateurs autorisés. Si le visage détecté correspond à un utilisateur autorisé, le système affiche "ACCES AUTORISE", sinon "ACCES REFUSE".
 
 ## Nouvelles Fonctionnalités
-### Détecteur DNN OpenCV
-Le détecteur DNN OpenCV est utilisé pour détecter les visages avec une plus grande précision. En cas d'indisponibilité des modèles DNN, un fallback automatique vers Haar cascade est activé.
-
-### Alignement de Visage
-L'alignement de visage est effectué en utilisant les landmarks pour réduire la variabilité angulaire. Cela permet d'améliorer la précision de la reconnaissance.
-
-### Vote Majoritaire Amélioré
-Le vote majoritaire est effectué sur une fenêtre glissante de 20 frames par défaut. Cela permet de réduire le bruit et les faux positifs/négatifs.
-
-### Support Multi-Utilisateurs
-Le système prend en charge plusieurs utilisateurs autorisés avec des centroïdes séparés. Cela permet d'améliorer la précision de la reconnaissance en fonction de l'utilisateur.
-
-### Prétraitement Amélioré
-Le prétraitement utilise la CLAHE (Contrast Limited Adaptive Histogram Equalization) pour améliorer la robustesse à l'éclairage.
+- **Détecteur DNN OpenCV** : Détection de visage plus robuste avec fallback automatique vers Haar cascade
+- **Alignement de visage** : Recalage automatique basé sur les landmarks pour réduire la variabilité angulaire
+- **Vote majoritaire amélioré** : Lissage temporel sur fenêtre glissante (20 frames par défaut) pour réduire le bruit
+- **Support multi-utilisateurs** : Gestion de plusieurs utilisateurs autorisés avec centroïdes séparés
+- **Prétraitement amélioré** : CLAHE (Contrast Limited Adaptive Histogram Equalization) pour robustesse à l'éclairage
 
 ## Prérequis
 - Python 3.9+
@@ -119,7 +110,7 @@ python live_demo.py --model-path models/eigenfaces.joblib --camera-index 0
 
 ### Décision Temporelle
 - **Vote Majoritaire** sur une fenêtre glissante de 20 frames
-- Décision après au moins 8 frames consécutifs avec visage détecté
+- Décision après au moins 8 frames consécutives avec visage détecté
 - Réduction du bruit et des faux positifs/négatifs
 
 ## Améliorations de Performance
